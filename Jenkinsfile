@@ -234,15 +234,23 @@ stage('Blue/Green Production Deployment') {
   }
 }
 
-    stage('Switch over to new Version') {
-      steps {
-        // TBD: Stop for approval
+stage('Switch over to new Version') {
+  steps {
+    input "Switch Production?"
 
-
-        echo "Executing production switch"
-        // TBD: After approval execute the switch
-
+    echo "Switching Production application to ${destApp}."
+    script {
+      openshift.withCluster() {
+        openshift.withProject("${prodProject}") {
+          def route = openshift.selector("route/tasks").object()
+          route.spec.to.name="${destApp}"
+          openshift.apply(route)
+        }
       }
     }
+  }
+}
+
+
   }
 }
