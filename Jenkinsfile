@@ -86,8 +86,9 @@ pipeline {
       steps {
         echo "Building OpenShift container image tasks:${devTag}"
 
-        openshift.withCluster() {
-          openshift.withProject("${devProject}") {
+        script {
+          openshift.withCluster() {
+            openshift.withProject("${devProject}") {
               def bc = openshift.selector("bc", "tasks")
               bc.describe()
               bc.startBuild("--from-file=http://nexus.${prefix}-nexus.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/tasks/${prodTag}/tasks-${prodTag}.war", "--wait=true")
@@ -95,6 +96,7 @@ pipeline {
 
               echo "Tagging the image"
               openshift.tag("tasks:latest", "tasks:${devTag}")
+            }
           }
         }
       }
