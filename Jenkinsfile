@@ -194,14 +194,41 @@ pipeline {
     stage('Blue/Green Production Deployment') {
       steps {
         echo "Blue/Green Deployment"
+        script {
+          openshift.withCluster() {
+            openshift.withProject("${prodProject}") {
 
-        // TBD: 1. Determine which application is active
-        //      2. Update the image for the other application
-        //      3. Deploy into the other application
-        //      4. Recreate Config maps for other application
-        //      5. Wait until application is running
-        //         See above for example code
+              echo "Trying to find currently running app"
+              def runningApp = openshift.selector("route", "tasks").object().spec.to.name
 
+              if (runningApp == "tasks-blue") {
+                targetApp = "tasks-green"
+              } else {
+                targetApp = "tasks-blue"
+              }
+
+              echo "Currently active application is " + runningApp
+              echo "We will change to application " + targetApp
+
+              echo "Update application to " + targetApp
+              def dc = openshift.selector("dc/${targetApp}").object()
+              dc.spec.template.spec.containers[0].image="image-registry.openshift-image-registry.svc:5000/${devProject}/tasks:${prodTag}"
+              openshift.apply(dc)
+
+              echo "Recreate Configmap"
+              openshift.selector("configmap", "${targetApp}-config").delete()
+              def configmap = openshift.create("configmap", "${targetApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties" )
+
+              echo "Deploy Application"
+              openshift.selector("dc", "${targetApp}").rollout().latest();
+
+              timeout (time: 10, unit: 'MINUTES') {
+                echo "Waiting for ReplicationController tasks to be ready"
+                dc.rollout().status()
+              }
+            }
+          }
+        }
       }
     }
 
