@@ -112,7 +112,7 @@ pipeline {
             openshift.withProject("${devProject}") {
 
               echo "Update the image on the dev deployment config"
-              openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/${devProject}/tasks:${devTag}")
+              openshift.set("image", "dc/tasks", "tasks=image-registry.openshift-image-registry.svc:5000/${devProject}/tasks:${devTag}")
 
               echo "Recreate the config maps"
               openshift.selector('configmap', 'tasks-config').delete()
@@ -137,7 +137,6 @@ pipeline {
             }
           }
         }
-
       }
     }
 
