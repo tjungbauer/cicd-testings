@@ -122,6 +122,7 @@ pipeline {
 
               echo "Redeploy the dev deployment"
               openshift.selector("dc", "tasks").rollout().latest();
+              def dc_version = dc.status.latestVersion
 
               timeout (time: 10, unit: 'MINUTES') {
                 echo "Waiting for ReplicationController tasks-${dc_version} to be ready"
