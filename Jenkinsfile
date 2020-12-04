@@ -219,12 +219,13 @@ pipeline {
               openshift.selector("configmap", "${targetApp}-config").delete()
               def configmap = openshift.create("configmap", "${targetApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties" )
 
-              echo "Deploy Application"
-              openshift.selector("dc", "${targetApp}").rollout().latest();
+              echo "Redeploy the prod deployment"
+              def deploy = openshift.selector("dc", "${targetApp}").rollout().latest();
+              deploy.rollout().latest()
 
               timeout (time: 10, unit: 'MINUTES') {
                 echo "Waiting for ReplicationController tasks to be ready"
-                dc.rollout().status()
+                deploy.rollout().status()
               }
             }
           }
