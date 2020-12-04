@@ -115,7 +115,7 @@ pipeline {
               openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/${devProject}/tasks:${devTag}")
 
               echo "Recreate the config maps"
-              openshift.selector( 'config', 'tasks-config' ).delete()
+              openshift.selector('configmap', 'tasks-config').delete()
 
               def cm = openshift.create( 'configmap', ,'tasks-config', '--from-literal=application-users.properties=./configuration/application-users.properties', '--from-literal=application-roles.properties=configuration/application-roles.properties' )
               cm.describe()
