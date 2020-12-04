@@ -191,47 +191,48 @@ pipeline {
     // Blue/Green Deployment into Production
     // -------------------------------------
     // Do not activate the new version yet.
-    stage('Blue/Green Production Deployment') {
-      steps {
-        echo "Blue/Green Deployment"
-        script {
-          openshift.withCluster() {
-            openshift.withProject("${prodProject}") {
+stage('Blue/Green Production Deployment') {
+  steps {
+    echo "Blue/Green Deployment"
+    script {
+      openshift.withCluster() {
+        openshift.withProject("${prodProject}") {
+          activeApp = openshift.selector("route", "tasks").object().spec.to.name
+          if (activeApp == "tasks-green") {
+            destApp = "tasks-blue"
+          }
+          echo "Active Application:      " + activeApp
+          echo "Destination Application: " + destApp
 
-              echo "Trying to find currently running app"
-              def runningApp = openshift.selector("route", "tasks").object().spec.to.name
+          // Update the Image on the Production Deployment Config
+          def dc = openshift.selector("dc/${destApp}").object()
 
-              if (runningApp == "tasks-blue") {
-                targetApp = "tasks-green"
-              } else {
-                targetApp = "tasks-blue"
-              }
+          dc.spec.template.spec.containers[0].image="image-registry.openshift-image-registry.svc:5000/${devProject}/tasks:${prodTag}"
 
-              echo "Currently active application is " + runningApp
-              echo "We will change to application " + targetApp
+          openshift.apply(dc)
 
-              echo "Update application to " + targetApp
-              def dc = openshift.selector("dc/${targetApp}").object()
-              dc.spec.template.spec.containers[0].image="image-registry.openshift-image-registry.svc:5000/${devProject}/tasks:${prodTag}"
-              openshift.apply(dc)
+          // Recreate Config Map in change config files changed in the source
+          openshift.selector("configmap", "${destApp}-config").delete()
+          def configmap = openshift.create("configmap", "${destApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties" )
 
-              echo "Recreate Configmap"
-              openshift.selector("configmap", "${targetApp}-config").delete()
-              def configmap = openshift.create("configmap", "${targetApp}-config", "--from-file=./configuration/application-users.properties", "--from-file=./configuration/application-roles.properties" )
+          // Deploy the inactive application.
+          openshift.selector("dc", "${destApp}").rollout().latest();
 
-              echo "Redeploy the prod deployment"
-              def deploy = openshift.selector("dc", "${targetApp}").rollout().latest();
-              deploy.rollout().latest()
-
-              timeout (time: 10, unit: 'MINUTES') {
-                echo "Waiting for ReplicationController tasks to be ready"
-                deploy.rollout().status()
-              }
-            }
+          // Wait for application to be deployed
+          sleep 5
+          def dc_prod = openshift.selector("dc", "${destApp}").object()
+          def dc_version = dc_prod.status.latestVersion
+          def rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
+          echo "Waiting for ${destApp} to be ready"
+          while (rc_prod.spec.replicas != rc_prod.status.readyReplicas) {
+            sleep 5
+            rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
           }
         }
       }
     }
+  }
+}
 
     stage('Switch over to new Version') {
       steps {
